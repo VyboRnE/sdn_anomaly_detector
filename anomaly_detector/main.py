@@ -68,7 +68,7 @@ def extract_features_from_aggregate(data: AggregatedTraffic) -> List[float]:
         top_ports_count
     ]
 
-@app.post("/api/sensor/submit")
+@app.post("/api/detect")
 async def receive_aggregate(request: Request, payload: AggregatedTraffic):
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):

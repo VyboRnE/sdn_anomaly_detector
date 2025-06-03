@@ -16,23 +16,12 @@ defmodule HubWeb.UserDashboardLive do
 
     {:ok,
      socket
-     |> assign(:sensors, sensors)
-     |> assign(:selected_sensor, selected_sensor)
-     |> assign(:show_add_form, false)
-     |> assign(:stats, stats)
-     |> assign(:top_ports, top_ports)}
-  end
-
-  def handle_event("select_sensor", %{"sensor_id" => sensor_id}, socket) do
-    sensor = Enum.find(socket.assigns.sensors, &(&1.id == String.to_integer(sensor_id)))
-    stats = load_stats(sensor)
-    top_ports = load_top_ports(sensor)
-
-    {:noreply,
-     socket
-     |> assign(selected_sensor: sensor)
+     |> assign(sensors: sensors)
+     |> assign(selected_sensor: selected_sensor)
+     |> assign(show_add_form: false)
      |> assign(stats: stats)
-     |> assign(:top_ports, top_ports)}
+     |> assign(top_ports: top_ports)
+     |> assign(search_period: "24h")}
   end
 
   defp load_stats(nil), do: %{}
@@ -51,6 +40,18 @@ defmodule HubWeb.UserDashboardLive do
     |> Enum.map(fn {port, count} -> %{port: port, count: count} end)
     |> Enum.sort_by(& &1.count, :desc)
     |> Enum.take(10)
+  end
+
+  def handle_event("select_sensor", %{"sensor_id" => sensor_id}, socket) do
+    sensor = Enum.find(socket.assigns.sensors, &(&1.id == String.to_integer(sensor_id)))
+    stats = load_stats(sensor)
+    top_ports = load_top_ports(sensor)
+
+    {:noreply,
+     socket
+     |> assign(selected_sensor: sensor)
+     |> assign(stats: stats)
+     |> assign(:top_ports, top_ports)}
   end
 
   def handle_event("add_sensor", _params, socket) do
@@ -79,5 +80,15 @@ defmodule HubWeb.UserDashboardLive do
       {:error, changeset} ->
         {:noreply, assign(socket, changeset: changeset)}
     end
+  end
+
+  def handle_event("change_period", %{"period" => search_period}, socket) do
+    stats = get_filtered_stats(socket.assigns.selected_sensor.id, search_period) || []
+
+    {:noreply,
+     socket
+     |> assign(:search_period, search_period)
+     |> assign(:stats, stats)
+     |> assign(:top_ports, extract_top_ports(stats))}
   end
 end

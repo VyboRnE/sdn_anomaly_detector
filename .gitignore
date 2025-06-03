@@ -8,3 +8,5 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 .elixir_ls/
+sensor_config.json
+__pycache__/

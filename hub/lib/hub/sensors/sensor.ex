@@ -7,7 +7,7 @@ defmodule Hub.Sensors.Sensor do
     field(:api_key, :string)
     belongs_to(:user, Hub.Accounts.User)
 
-    has_many(:trafic_records, Hub.TrafficRecords.TrafficRecord)
+    has_many(:traffic_records, Hub.TrafficRecords.TrafficRecord)
 
     timestamps(type: :utc_datetime)
   end

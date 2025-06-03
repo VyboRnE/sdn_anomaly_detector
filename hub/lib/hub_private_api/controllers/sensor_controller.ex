@@ -3,11 +3,11 @@ defmodule HubPrivateAPI.Controllers.SensorController do
 
   alias Hub.Sensors
   alias Hub.Sensors.Sensor
-  alias Hub.Traffic
+  alias Hub.TrafficRecords
 
-  @detector_url "http://detector-host:8000/api/sensor/submit"
+  @detector_url "http://0.0.0.0:8000/api/detect"
 
-  def submit(conn, %{"data" => packets}) do
+  def receive_data(conn, params) do
     case get_req_header(conn, "authorization") do
       ["Bearer " <> api_key] ->
         case Sensors.get_sensor_by_api_key(api_key) do
@@ -16,8 +16,7 @@ defmodule HubPrivateAPI.Controllers.SensorController do
 
           %Sensor{} = sensor ->
             Task.start(fn ->
-              Traffic.store_packets(sensor.id, packets)
-              forward_and_handle_anomalies(sensor, packets)
+              forward_and_handle_anomalies(sensor, params)
             end)
 
             send_resp(conn, 202, "Accepted")
@@ -28,24 +27,19 @@ defmodule HubPrivateAPI.Controllers.SensorController do
     end
   end
 
-  defp forward_and_handle_anomalies(sensor, packets) do
+  defp forward_and_handle_anomalies(sensor, params) do
     headers = [
       {"Content-Type", "application/json"},
       {"Authorization", "Bearer #{sensor.api_key}"}
     ]
 
-    body = Jason.encode!(%{data: packets})
+    body = Jason.encode!(params)
 
     case HTTPoison.post(@detector_url, body, headers) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
-          {:ok,
-           %{
-             "cusum_anomaly" => cusum_anomaly,
-             "isolation_anomalies" => isolation_anomalies,
-             "total_packets" => total_packets
-           }} ->
-            Traffic.mark_anomalies(sensor.id, packets, isolation_anomalies)
+          {:ok, %{} = data} ->
+            TrafficRecords.store_report(sensor, data)
 
           _ ->
             IO.warn("[!] Could not parse AI module response")
@@ -54,7 +48,8 @@ defmodule HubPrivateAPI.Controllers.SensorController do
       {:error, err} ->
         IO.inspect(err, label: "Error contacting AI module")
 
-      _ ->
+      err ->
+        IO.inspect(err)
         IO.warn("[!] Unknown error from AI module")
     end
   end

@@ -14,108 +14,113 @@
       <form phx-submit="save_sensor">
         <input type="text" name="sensor[name]" placeholder="Назва сенсора"
           class="border border-gray-300 px-3 py-2 rounded w-full mb-4 focus:outline-none focus:ring-2 focus:ring-black" />
-        <button type="submit"
-          class="bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-700 transition">💾 Зберегти</button>
+        <button type="submit" class="bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-700 transition">💾
+          Зберегти</button>
       </form>
     </div>
-  <% end %>
+    <% end %>
 
-  <!-- Таблиця сенсорів -->
-  <div class="overflow-x-auto">
-    <table class="table-auto w-full border-collapse border border-gray-300 shadow-sm bg-white rounded-lg">
-      <thead>
-        <tr class="bg-gray-200 text-gray-800">
-          <th class="border border-gray-300 px-4 py-2 text-left">Назва</th>
-          <th class="border border-gray-300 px-4 py-2 text-left">API Ключ</th>
-        </tr>
-      </thead>
-      <tbody>
-        <%= for sensor <- @sensors do %>
-          <tr phx-click="select_sensor" phx-value-sensor_id={sensor.id}
-            class={"cursor-pointer transition hover:bg-gray-100 " <> if @selected_sensor && sensor.id == @selected_sensor.id, do: " bg-gray-300", else: ""}>
-            <td class="border border-gray-300 px-4 py-2"><%= sensor.name %></td>
-            <td class="border border-gray-300 px-4 py-2"><%= sensor.api_key || "–" %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </div>
+      <!-- Таблиця сенсорів -->
+      <div class="overflow-x-auto">
+        <table class="table-auto w-full border-collapse border border-gray-300 shadow-sm bg-white rounded-lg">
+          <thead>
+            <tr class="bg-gray-200 text-gray-800">
+              <th class="border border-gray-300 px-4 py-2 text-left">Назва</th>
+              <th class="border border-gray-300 px-4 py-2 text-left">API Ключ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for sensor <- @sensors do %>
+              <tr phx-click="select_sensor" phx-value-sensor_id={sensor.id} class={"cursor-pointer transition
+                hover:bg-gray-100 " <> if @selected_sensor && sensor.id == @selected_sensor.id, do: " bg-gray-300",
+                else: "" }>
+                <td class="border border-gray-300 px-4 py-2">
+                  <%= sensor.name %>
+                </td>
+                <td class="border border-gray-300 px-4 py-2">
+                  <%= sensor.api_key || "–" %>
+                </td>
+              </tr>
+              <% end %>
+          </tbody>
+        </table>
+      </div>
 
-  <!-- Деталі сенсора -->
-  <%= if @selected_sensor do %>
-    <div class="p-6 border border-gray-300 rounded-lg shadow bg-white">
-      <h2 class="text-xl font-semibold mb-4">Інформація про сенсор: <%= @selected_sensor.name %></h2>
-      <p class="mb-4"><strong>API ключ:</strong> <%= @selected_sensor.api_key || "не встановлено" %></p>
+      <!-- Деталі сенсора -->
+      <%= if @selected_sensor do %>
+        <div class="p-6 border border-gray-300 rounded-lg shadow bg-white">
+          <h2 class="text-xl font-semibold mb-4">Інформація про сенсор: <%= @selected_sensor.name %>
+          </h2>
+          <p class="mb-4"><strong>API ключ:</strong>
+            <%= @selected_sensor.api_key || "не встановлено" %>
+          </p>
 
-      <%= if @stats != [] do %>
+          <%= if @stats !=[] do %>
 
-        <!-- Чарт 1 -->
-        <section class="mt-6">
-          <h3 class="text-lg font-medium mb-2">📊 Трафік і аномалії у часі</h3>
-          <div id="trafficAnomalyChart" phx-hook="TrafficAnomalyChart"
-            data-chart={Jason.encode!(%{
-              categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}")),
-              total_packets: Enum.map(@stats, & &1.total_packet_count),
-              anomaly_flags: Enum.map(@stats, &(&1.anomaly_count || 0))
-            })}
-            class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
-          </div>
-        </section>
+            <form phx-change="change_period" class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1" for="period">Період перегляду:</label>
+              <select name="period" id="period"
+                class="border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-black">
+                <option value="1h" selected={@search_period=="1h" }>Остання година</option>
+                <option value="3h" selected={@search_period=="3h" }>Останні 3 годин</option>
+                <option value="6h" selected={@search_period=="6h" }>Останні 6 годин</option>
+                <option value="24h" selected={@search_period=="24h" }>Останні 24 години</option>
+                <option value="3d" selected={@search_period=="3d" }>Останні 3 дні</option>
+                <option value="7d" selected={@search_period=="7d" }>Останні 7 днів</option>
+              </select>
+            </form>
 
-        <!-- Інші чарти: аналогічно -->
-        <section class="mt-6">
-          <h3 class="text-lg font-medium mb-2">🔍 Розподіл протоколів у часі</h3>
-          <div id="protocolDistributionChart" phx-hook="ProtocolDistributionChart"
-            data-chart={Jason.encode!(%{
-              categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}")),
-              tcp: Enum.map(@stats, &(&1.proto_tcp_count || 0)),
-              udp: Enum.map(@stats, &(&1.proto_udp_count || 0)),
-              icmp: Enum.map(@stats, &(&1.proto_icmp_count || 0))
-            })}
-            class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
-          </div>
-        </section>
+            <section class="mt-6">
+              <h3 class="text-lg font-medium mb-2">📊 Трафік і аномалії у часі</h3>
+              <div id="trafficAnomalyChart" phx-hook="TrafficAnomalyChart" data-chart={Jason.encode!(%{ categories:
+                Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), total_packets: Enum.map(@stats, &
+                &1.total_packet_count), anomaly_flags: Enum.map(@stats, &(&1.anomaly_count || 0)) })}
+                class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+              </div>
+            </section>
 
-        <section class="mt-6">
-          <h3 class="text-lg font-medium mb-2">⚠️ Аномалії: CUSUM vs Isolation Forest</h3>
-          <div id="anomalyComparisonChart" phx-hook="AnomalyComparisonChart"
-            data-chart={Jason.encode!(%{
-              categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}")),
-              cusum: Enum.map(@stats, & &1.cusum_anomaly_count),
-              isolation: Enum.map(@stats, & &1.isolation_anomaly_count)
-            })}
-            class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
-          </div>
-        </section>
+            <section class="mt-6">
+              <h3 class="text-lg font-medium mb-2">🔍 Розподіл протоколів у часі</h3>
+              <div id="protocolDistributionChart" phx-hook="ProtocolDistributionChart" data-chart={Jason.encode!(%{
+                categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), tcp: Enum.map(@stats,
+                &(&1.proto_tcp_count || 0)), udp: Enum.map(@stats, &(&1.proto_udp_count || 0)), icmp: Enum.map(@stats,
+                &(&1.proto_icmp_count || 0)) })}
+                class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+              </div>
+            </section>
 
-        <section class="mt-6">
-          <h3 class="text-lg font-medium mb-2">🎯 Топ цільових портів</h3>
-          <div id="topPortsChart" phx-hook="TopPortsChart"
-            data-chart={Jason.encode!(%{
-              ports: Enum.map(@top_ports, & &1.port),
-              counts: Enum.map(@top_ports, & &1.count)
-            })}
-            class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
-          </div>
-        </section>
+            <section class="mt-6">
+              <h3 class="text-lg font-medium mb-2">⚠️ Аномалії: CUSUM vs Isolation Forest</h3>
+              <div id="anomalyComparisonChart" phx-hook="AnomalyComparisonChart" data-chart={Jason.encode!(%{
+                categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), cusum: Enum.map(@stats, &
+                &1.cusum_anomaly_count), isolation: Enum.map(@stats, & &1.isolation_anomaly_count) })}
+                class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+              </div>
+            </section>
 
-        <section class="mt-6">
-          <h3 class="text-lg font-medium mb-2">🌍 Унікальні IP-адреси у часі</h3>
-          <div id="uniqueIpsChart" phx-hook="UniqueIpsChart"
-            data-chart={Jason.encode!(%{
-              categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}")),
-              unique_src_ips: Enum.map(@stats, & &1.total_unique_src_ips)
-            })}
-            class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
-          </div>
-        </section>
+            <section class="mt-6">
+              <h3 class="text-lg font-medium mb-2">🎯 Топ цільових портів</h3>
+              <div id="topPortsChart" phx-hook="TopPortsChart" data-chart={Jason.encode!(%{ ports: Enum.map(@top_ports,
+                & &1.port), counts: Enum.map(@top_ports, & &1.count) })}
+                class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+              </div>
+            </section>
 
-      <% else %>
-        <p class="text-gray-600">Немає інформації за даним сенсором.</p>
-      <% end %>
-    </div>
-  <% else %>
-    <p class="text-gray-700">Оберіть сенсор зі списку вище, щоб переглянути деталі.</p>
-  <% end %>
+            <section class="mt-6">
+              <h3 class="text-lg font-medium mb-2">🌍 Унікальні IP-адреси у часі</h3>
+              <div id="uniqueIpsChart" phx-hook="UniqueIpsChart" data-chart={Jason.encode!(%{ categories:
+                Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), unique_src_ips: Enum.map(@stats, &
+                &1.total_unique_src_ips) })}
+                class="w-full h-64 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+              </div>
+            </section>
+
+            <% else %>
+              <p class="text-gray-600">Немає інформації за даним сенсором.</p>
+              <% end %>
+        </div>
+        <% else %>
+          <p class="text-gray-700">Оберіть сенсор зі списку вище, щоб переглянути деталі.</p>
+          <% end %>
 
 </div>

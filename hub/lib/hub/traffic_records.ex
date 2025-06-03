@@ -3,11 +3,6 @@ defmodule Hub.TrafficRecords do
   alias Hub.Repo
   alias Hub.TrafficRecords.TrafficRecord
 
-  @doc """
-  Отримати статистику для конкретного sensor_id за останні `hours` годин.
-
-  Повертає map з агрегованою статистикою, включно з підрахунком пакетів за протоколами.
-  """
   def get_sensor_stats(sensor_id, hours \\ 24) do
     interval = "minute"
     now_unix = DateTime.utc_now() |> DateTime.to_unix()
@@ -60,5 +55,12 @@ defmodule Hub.TrafficRecords do
       limit: 10
     )
     |> Repo.all()
+  end
+
+  def store_report(sensor, attrs) do
+    sensor
+    |> Ecto.build_assoc(:traffic_records)
+    |> TrafficRecord.changeset(attrs)
+    |> Repo.insert()
   end
 end
