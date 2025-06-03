@@ -15,11 +15,14 @@
 
 <body class="bg-white">
   <div class="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-gray-200">
-
-
-    <a href="/">
-      <img src={~p"/images/logo.png"} width="36" />
-    </a>
+    <div class="flex items-center gap-4">
+      <a href="/">
+        <img src={~p"/images/logo.png"} width="36" />
+      </a>
+      <span class="text-2xl font-extrabold text-black" style="font-family: 'Poppins', sans-serif;">
+        AnomalyHub
+      </span>
+    </div>
     <ul class="flex items-center gap-4">
       <%= if @current_user do %>
         <li class="text-sm font-bold text-black">
