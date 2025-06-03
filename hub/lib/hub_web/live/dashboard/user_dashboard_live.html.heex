@@ -11,65 +11,94 @@
     <thead>
       <tr class="bg-gray-200">
         <th class="border border-gray-300 px-4 py-2 text-left">Назва</th>
-        <th class="border border-gray-300 px-4 py-2 text-left">ID</th>
-        <th class="border border-gray-300 px-4 py-2 text-left">API Key</th>
+        <th class="border border-gray-300 px-4 py-2 text-left">API Ключ</th>
       </tr>
     </thead>
     <tbody>
       <%= for sensor <- @sensors do %>
-        <tr
-          phx-click="select_sensor"
-          phx-value-sensor_id={sensor.id}
-          class={"cursor-pointer hover:bg-gray-100 " <> if @selected_sensor && sensor.id == @selected_sensor.id, do: "bg-blue-100", else: ""}
-        >
-          <td class="border border-gray-300 px-4 py-2"><%= sensor.name %></td>
-          <td class="border border-gray-300 px-4 py-2"><%= sensor.api_key || "–" %></td>
+        <tr phx-click="select_sensor" phx-value-sensor_id={sensor.id} class={"cursor-pointer
+          hover:bg-gray-100 " <> if @selected_sensor && sensor.id == @selected_sensor.id, do: " bg-blue-100", else: ""
+          }>
+          <td class="border border-gray-300 px-4 py-2">
+            <%= sensor.name %>
+          </td>
+          <td class="border border-gray-300 px-4 py-2">
+            <%= sensor.api_key || "–" %>
+          </td>
         </tr>
-      <% end %>
+        <% end %>
     </tbody>
   </table>
 
   <!-- Деталі сенсора -->
   <%= if @selected_sensor do %>
     <div class="p-4 border rounded-lg shadow-md bg-white">
-      <h2 class="text-xl font-semibold mb-2">Інформація про сенсор</h2>
-      <p><strong>Назва:</strong> <%= @selected_sensor.name %></p>
-      <p><strong>ID:</strong> <%= @selected_sensor.id %></p>
-      <p><strong>API ключ:</strong> <%= @selected_sensor.api_key || "не встановлено" %></p>
 
-      <h3 class="text-lg font-medium mt-4 mb-2">Графік трафіку</h3>
-      <%= if @stats && Enum.any?(@stats) do %>
-        <div
-          id="trafficCanvas"
-          phx-hook="TrafficChart"
-          data-chart={Jason.encode!(%{
-            timestamps: Enum.map(@stats, & &1.timestamp),
-            values: Enum.map(@stats, & &1.value)
-          })}
-        >
+      <h2 class="text-xl font-semibold mb-4">Інформація про сенсор: <%= @selected_sensor.name %>
+      </h2>
+
+      <p><strong>API ключ:</strong>
+        <%= @selected_sensor.api_key || "не встановлено" %>
+      </p>
+
+      <!-- 1. Загальний трафік + аномалії (Time Series Overlay) -->
+      <section class="mt-6">
+        <h3 class="text-lg font-medium mb-2">📊 Трафік і аномалії у часі</h3>
+        <div id="trafficAnomalyChart" phx-hook="TrafficAnomalyChart" data-chart={Jason.encode!(%{ categories:
+          Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), total_packets: Enum.map(@stats, &
+          &1.total_packet_count), anomaly_flags: Enum.map(@stats, &(&1.anomaly_count || 0)) })} class="w-full h-64">
         </div>
-      <% else %>
-        <p>Немає даних для цього сенсора.</p>
-      <% end %>
+      </section>
+
+      <!-- 2. Розподіл протоколів -->
+      <section class="mt-6">
+        <h3 class="text-lg font-medium mb-2">🔍 Розподіл протоколів у часі</h3>
+        <div id="protocolDistributionChart" phx-hook="ProtocolDistributionChart" data-chart={Jason.encode!(%{
+          categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), tcp: Enum.map(@stats,
+          &(&1.proto_tcp_count || 0)), udp: Enum.map(@stats, &(&1.proto_udp_count || 0)), icmp: Enum.map(@stats,
+          &(&1.proto_icmp_count || 0)) })} class="w-full h-64"></div>
+      </section>
+
+      <!-- 3. Порівняння CUSUM та Isolation Forest -->
+      <section class="mt-6">
+        <h3 class="text-lg font-medium mb-2">⚠️ Аномалії: CUSUM vs Isolation Forest</h3>
+        <div id="anomalyComparisonChart" phx-hook="AnomalyComparisonChart" data-chart={Jason.encode!(%{ categories:
+          Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), cusum: Enum.map(@stats, &
+          &1.cusum_anomaly_count), isolation: Enum.map(@stats, & &1.isolation_anomaly_count) })} class="w-full h-64">
+        </div>
+      </section>
+
+      <!-- 4. Топ портів 
+      <section class="mt-6">
+        <h3 class="text-lg font-medium mb-2">🎯 Топ цільових портів</h3>
+        <div id="topPortsChart" phx-hook="TopPortsChart" data-chart={Jason.encode!(%{ ports: Enum.map(@top_ports, &
+          &1.port), counts: Enum.map(@top_ports, & &1.count) })} class="w-full h-64"></div>
+      </section> -->
+
+      <!-- 5. Унікальні IP у часі -->
+      <section class="mt-6">
+        <h3 class="text-lg font-medium mb-2">🌍 Унікальні IP-адреси у часі</h3>
+        <div id="uniqueIpsChart" phx-hook="UniqueIpsChart" data-chart={Jason.encode!(%{ categories: Enum.map(@stats,
+          &Timex.format!(&1.time, "{ISO:Extended}" )), unique_src_ips: Enum.map(@stats, & &1.total_unique_src_ips) })}
+          class="w-full h-64"></div>
+      </section>
+
+
     </div>
-  <% else %>
-    <p>Оберіть сенсор зі списку вище, щоб переглянути деталі.</p>
-  <% end %>
+    <% else %>
+      <p>Оберіть сенсор зі списку вище, щоб переглянути деталі.</p>
+      <% end %>
 
+        <%= if @show_add_form do %>
+          <div class="p-4 border rounded-md shadow bg-gray-50 mt-6">
+            <h3 class="text-lg font-semibold mb-2">Новий сенсор</h3>
+            <form phx-submit="save_sensor">
+              <input type="text" name="sensor[name]" placeholder="Назва сенсора"
+                class="border px-2 py-1 rounded w-1/2 mb-2" />
+              <br />
+              <button type="submit" class="btn btn-success">💾 Зберегти</button>
+            </form>
+          </div>
+          <% end %>
 
-  <%= if @show_add_form do %>
-  <div class="p-4 border rounded-md shadow bg-gray-50">
-    <h3 class="text-lg font-semibold mb-2">Новий сенсор</h3>
-    <form phx-submit="save_sensor">
-      <input
-        type="text"
-        name="sensor[name]"
-        placeholder="Назва сенсора"
-        class="border px-2 py-1 rounded w-1/2 mb-2"
-      />
-      <br />
-      <button type="submit" class="btn btn-success">💾 Зберегти</button>
-    </form>
-  </div>
-<% end %>
 </div>

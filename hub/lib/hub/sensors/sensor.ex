@@ -7,6 +7,8 @@ defmodule Hub.Sensors.Sensor do
     field(:api_key, :string)
     belongs_to(:user, Hub.Accounts.User)
 
+    has_many(:trafic_records, Hub.TrafficRecords.TrafficRecord)
+
     timestamps(type: :utc_datetime)
   end
 
@@ -17,5 +19,4 @@ defmodule Hub.Sensors.Sensor do
     |> validate_required([:name, :api_key])
     |> unique_constraint(:api_key)
   end
-
 end

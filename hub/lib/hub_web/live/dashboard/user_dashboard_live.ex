@@ -3,6 +3,7 @@ defmodule HubWeb.UserDashboardLive do
   alias Hub.Sensors
 
   alias Hub.Accounts
+  alias Hub.TrafficRecords
   @impl true
   def mount(_params, %{"user_token" => user_token} = session, socket) do
     user = Accounts.get_user_by_session_token(user_token)
@@ -17,7 +18,8 @@ defmodule HubWeb.UserDashboardLive do
      |> assign(:sensors, sensors)
      |> assign(:selected_sensor, selected_sensor)
      |> assign(:show_add_form, false)
-     |> assign(:stats, stats)}
+     |> assign(:stats, stats)
+    }
   end
 
   def handle_event("select_sensor", %{"sensor_id" => sensor_id}, socket) do
@@ -30,9 +32,7 @@ defmodule HubWeb.UserDashboardLive do
   defp load_stats(nil), do: %{}
 
   defp load_stats(sensor) do
-    # Тут витягуємо статистику трафіку для сенсора (з БД чи кешу)
-    # Повертаємо у форматі, який зручно передавати графіку
-    Sensors.get_traffic_stats(sensor.id)
+    TrafficRecords.get_sensor_stats(sensor.id)
   end
 
   def handle_event("add_sensor", _params, socket) do
@@ -44,7 +44,6 @@ defmodule HubWeb.UserDashboardLive do
         %{"sensor" => %{"name" => name}},
         %{assigns: %{current_user: user}} = socket
       ) do
- IO.inspect(user)
     case Hub.Sensors.create_sensor(user, %{"name" => name}) do
       {:ok, _sensor} ->
         sensors = Hub.Sensors.list_sensors_by_user(user.id)
