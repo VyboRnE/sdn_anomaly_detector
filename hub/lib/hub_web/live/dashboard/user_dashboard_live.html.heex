@@ -1,0 +1,75 @@
+<div class="space-y-6">
+
+  <div class="mb-4">
+    <button phx-click="add_sensor" class="btn btn-primary">
+      ➕ Додати сенсор
+    </button>
+  </div>
+
+  <!-- Таблиця сенсорів -->
+  <table class="table-auto w-full border-collapse border border-gray-400">
+    <thead>
+      <tr class="bg-gray-200">
+        <th class="border border-gray-300 px-4 py-2 text-left">Назва</th>
+        <th class="border border-gray-300 px-4 py-2 text-left">ID</th>
+        <th class="border border-gray-300 px-4 py-2 text-left">API Key</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for sensor <- @sensors do %>
+        <tr
+          phx-click="select_sensor"
+          phx-value-sensor_id={sensor.id}
+          class={"cursor-pointer hover:bg-gray-100 " <> if @selected_sensor && sensor.id == @selected_sensor.id, do: "bg-blue-100", else: ""}
+        >
+          <td class="border border-gray-300 px-4 py-2"><%= sensor.name %></td>
+          <td class="border border-gray-300 px-4 py-2"><%= sensor.api_key || "–" %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+
+  <!-- Деталі сенсора -->
+  <%= if @selected_sensor do %>
+    <div class="p-4 border rounded-lg shadow-md bg-white">
+      <h2 class="text-xl font-semibold mb-2">Інформація про сенсор</h2>
+      <p><strong>Назва:</strong> <%= @selected_sensor.name %></p>
+      <p><strong>ID:</strong> <%= @selected_sensor.id %></p>
+      <p><strong>API ключ:</strong> <%= @selected_sensor.api_key || "не встановлено" %></p>
+
+      <h3 class="text-lg font-medium mt-4 mb-2">Графік трафіку</h3>
+      <%= if @stats && Enum.any?(@stats) do %>
+        <div
+          id="trafficCanvas"
+          phx-hook="TrafficChart"
+          data-chart={Jason.encode!(%{
+            timestamps: Enum.map(@stats, & &1.timestamp),
+            values: Enum.map(@stats, & &1.value)
+          })}
+        >
+        </div>
+      <% else %>
+        <p>Немає даних для цього сенсора.</p>
+      <% end %>
+    </div>
+  <% else %>
+    <p>Оберіть сенсор зі списку вище, щоб переглянути деталі.</p>
+  <% end %>
+
+
+  <%= if @show_add_form do %>
+  <div class="p-4 border rounded-md shadow bg-gray-50">
+    <h3 class="text-lg font-semibold mb-2">Новий сенсор</h3>
+    <form phx-submit="save_sensor">
+      <input
+        type="text"
+        name="sensor[name]"
+        placeholder="Назва сенсора"
+        class="border px-2 py-1 rounded w-1/2 mb-2"
+      />
+      <br />
+      <button type="submit" class="btn btn-success">💾 Зберегти</button>
+    </form>
+  </div>
+<% end %>
+</div>

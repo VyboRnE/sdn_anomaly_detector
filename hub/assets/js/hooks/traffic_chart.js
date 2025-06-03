@@ -1,48 +1,50 @@
-let TrafficChart = {
+import ApexCharts from "apexcharts";
+
+let Hooks = {};
+
+Hooks.TrafficChart = {
   mounted() {
-    const ctx = document.getElementById("trafficCanvas").getContext("2d");
-    const data = this.getDataFromAssigns();
-    this.chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.timestamps,
-        datasets: [
-          {
-            label: 'Вхідний трафік',
-            data: data.bytes_in,
-            borderColor: 'blue',
-            fill: false
-          },
-          {
-            label: 'Вихідний трафік',
-            data: data.bytes_out,
-            borderColor: 'red',
-            fill: false
-          }
-        ]
+    // Парсимо дані з data-атрибута (передані з LiveView)
+    const data = JSON.parse(this.el.dataset.chart);
+
+    const options = {
+      chart: {
+        type: 'line',
+        height: 350,
+        toolbar: {
+          show: true
+        }
       },
-      options: { responsive: true }
-    });
-  },
-
-  updated() {
-    const data = this.getDataFromAssigns();
-    this.chart.data.labels = data.timestamps;
-    this.chart.data.datasets[0].data = data.bytes_in;
-    this.chart.data.datasets[1].data = data.bytes_out;
-    this.chart.update();
-  },
-
-  getDataFromAssigns() {
-    // Дані передаються з LiveView як JSON у data-атрибутах або через socket assigns
-    // Тут приклад - отримати дані з елементу
-    const el = this.el;
-    return {
-      timestamps: JSON.parse(el.dataset.timestamps),
-      bytes_in: JSON.parse(el.dataset.bytesIn),
-      bytes_out: JSON.parse(el.dataset.bytesOut)
+      series: [{
+        name: 'Трафік',
+        data: data.values
+      }],
+      xaxis: {
+        categories: data.timestamps,
+        labels: {
+          rotate: -45,
+          datetimeFormatter: {
+            year: 'yyyy',
+            month: "MMM 'yy",
+            day: 'dd MMM',
+            hour: 'HH:mm'
+          }
+        }
+      },
+      stroke: {
+        curve: 'smooth'
+      }
     };
+
+    this.chart = new ApexCharts(this.el, options);
+    this.chart.render();
+  },
+
+  destroyed() {
+    if (this.chart) {
+      this.chart.destroy();
+    }
   }
 };
 
-export default TrafficChart;
+export default Hooks;

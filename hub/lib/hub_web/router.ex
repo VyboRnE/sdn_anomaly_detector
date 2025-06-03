@@ -17,14 +17,10 @@ defmodule HubWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/", HubWeb do
-    pipe_through [:browser, :authenticate_user]
 
-  live "/dashboard", DashboardLive, :index
-  end
 
   scope "/api/sensor" do
-    pipe_through [:api, :authenticate_sensor]
+    pipe_through [:api]
 
     post "/", SensorController, :receive_data
   end
@@ -62,6 +58,7 @@ defmodule HubWeb.Router do
       live "/users/log_in", UserLoginLive, :new
       live "/users/reset_password", UserForgotPasswordLive, :new
       live "/users/reset_password/:token", UserResetPasswordLive, :edit
+
     end
 
     post "/users/log_in", UserSessionController, :create
@@ -74,6 +71,8 @@ defmodule HubWeb.Router do
       on_mount: [{HubWeb.UserAuth, :ensure_authenticated}] do
       live "/users/settings", UserSettingsLive, :edit
       live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
+       live "/dashboard", UserDashboardLive, :show
+      live "/", UserDashboardLive, :show
     end
   end
 
