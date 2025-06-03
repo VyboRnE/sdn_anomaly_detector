@@ -4,12 +4,21 @@ import json
 import time
 import threading
 import os
+from collections import Counter
 from dotenv import load_dotenv
 
 CONFIG_FILE = "sensor_config.json"
 SEND_INTERVAL = 5
-packet_buffer = []
 lock = threading.Lock()
+
+# Агреговані дані
+stats = {
+    "packet_count": 0,
+    "unique_src_ips": set(),
+    "proto_counter": Counter(),
+    "tcp_syn_count": 0,
+    "dst_ports": Counter()
+}
 
 # Завантаження .env
 load_dotenv()
@@ -26,9 +35,7 @@ def load_or_create_config():
     else:
         print("[*] Введіть ваш унікальний API ключ (наданий адміністратором):")
         api_key = input("API ключ: ").strip()
-        config = {
-            "api_key": api_key
-        }
+        config = {"api_key": api_key}
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f)
             print(f"[*] Конфігурацію збережено у {CONFIG_FILE}.")
@@ -36,45 +43,59 @@ def load_or_create_config():
 
 def packet_callback(packet):
     if packet.haslayer(scapy.IP):
-        pkt_info = {
-            "timestamp": time.time(),
-            "src_ip": packet[scapy.IP].src,
-            "dst_ip": packet[scapy.IP].dst,
-            "proto": packet[scapy.IP].proto,
-            "length": len(packet)
-        }
-
-        if packet.haslayer(scapy.TCP):
-            pkt_info["src_port"] = packet[scapy.TCP].sport
-            pkt_info["dst_port"] = packet[scapy.TCP].dport
-        elif packet.haslayer(scapy.UDP):
-            pkt_info["src_port"] = packet[scapy.UDP].sport
-            pkt_info["dst_port"] = packet[scapy.UDP].dport
-
         with lock:
-            packet_buffer.append(pkt_info)
+            stats["packet_count"] += 1
+            stats["unique_src_ips"].add(packet[scapy.IP].src)
 
-def send_packets(config):
+            proto = packet[scapy.IP].proto
+            stats["proto_counter"][proto] += 1
+
+            if packet.haslayer(scapy.TCP):
+                tcp_layer = packet[scapy.TCP]
+                # Перевірка лише SYN флагу
+                if tcp_layer.flags == "S":
+                    stats["tcp_syn_count"] += 1
+                stats["dst_ports"][tcp_layer.dport] += 1
+
+            elif packet.haslayer(scapy.UDP):
+                udp_layer = packet[scapy.UDP]
+                stats["dst_ports"][udp_layer.dport] += 1
+
+def send_stats(config):
     while True:
         time.sleep(SEND_INTERVAL)
         with lock:
-            if packet_buffer:
-                payload = {"data": packet_buffer.copy()}
-                headers = {
-                    "Authorization": f"Bearer {config['api_key']}",
-                    "Content-Type": "application/json"
-                }
-                try:
-                    response = requests.post(SERVER_URL, json=payload, headers=headers)
-                    print(f"[+] Надіслано {len(packet_buffer)} пакетів. Статус: {response.status_code}")
-                except Exception as e:
-                    print(f"[!] Помилка надсилання: {e}")
-                packet_buffer.clear()
+            payload = {
+                "timestamp": int(time.time()),
+                "packet_count": stats["packet_count"],
+                "unique_src_ip_count": len(stats["unique_src_ips"]),
+                "proto_counter": dict(stats["proto_counter"]),
+                "tcp_syn_count": stats["tcp_syn_count"],
+                "top_dst_ports": stats["dst_ports"].most_common(10)
+            }
+
+            headers = {
+                "Authorization": f"Bearer {config['api_key']}",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                response = requests.post(SERVER_URL, json=payload, headers=headers)
+                print(f"[+] Надіслано {payload['packet_count']} пакетів. Статус: {response.status_code}")
+            except Exception as e:
+                print(f"[!] Помилка надсилання: {e}")
+
+            # Очистка
+            stats["packet_count"] = 0
+            stats["unique_src_ips"].clear()
+            stats["proto_counter"].clear()
+            stats["tcp_syn_count"] = 0
+            stats["dst_ports"].clear()
 
 def main():
     config = load_or_create_config()
     print("[*] Запуск сенсора трафіку...")
-    threading.Thread(target=send_packets, args=(config,), daemon=True).start()
+    threading.Thread(target=send_stats, args=(config,), daemon=True).start()
     scapy.sniff(prn=packet_callback, store=False)
 
 if __name__ == "__main__":

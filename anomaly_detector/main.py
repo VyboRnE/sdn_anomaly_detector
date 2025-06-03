@@ -1,66 +1,96 @@
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 app = FastAPI()
 
-# Існуючі структури
+# === Ініціалізація моделей, скейлерів, буферів ===
 user_models: Dict[str, IsolationForest] = {}
 user_scalers: Dict[str, StandardScaler] = {}
 user_buffers: Dict[str, List[List[float]]] = {}
 MIN_TRAIN_SIZE = 100
 
-# Додамо CUSUM для кожного користувача
+# === Простий CUSUM детектор ===
+class CusumDetector:
+    def __init__(self, threshold: float, drift: float = 0.0):
+        self.threshold = threshold
+        self.drift = drift
+        self.pos_sum = 0.0
+        self.neg_sum = 0.0
+        self.last_mean = None
+
+    def update(self, value: float) -> bool:
+        if self.last_mean is None:
+            self.last_mean = value
+            return False
+
+        diff = value - self.last_mean - self.drift
+        self.pos_sum = max(0, self.pos_sum + diff)
+        self.neg_sum = min(0, self.neg_sum + diff)
+
+        if self.pos_sum > self.threshold or abs(self.neg_sum) > self.threshold:
+            # Сигнал аномалії, скидаємо накопичення
+            self.pos_sum = 0
+            self.neg_sum = 0
+            return True
+
+        return False
+
 user_cusums: Dict[str, CusumDetector] = {}
 
-class Packet(BaseModel):
-    timestamp: float
-    src_ip: str
-    dst_ip: str
-    proto: int
-    length: int
-    src_port: int = None
-    dst_port: int = None
+# === Очікувана агрегована структура від сенсора ===
+class AggregatedTraffic(BaseModel):
+    timestamp: int
+    packet_count: int
+    unique_src_ip_count: int
+    proto_counter: Dict[str, int]
+    tcp_syn_count: int
+    top_dst_ports: List[Tuple[int, int]]
 
-class PacketPayload(BaseModel):
-    data: List[Packet]
+# === Фічі для моделі IsolationForest ===
+def extract_features_from_aggregate(data: AggregatedTraffic) -> List[float]:
+    proto_tcp = data.proto_counter.get("6", 0)
+    proto_udp = data.proto_counter.get("17", 0)
+    proto_icmp = data.proto_counter.get("1", 0)
 
-def extract_features(packet: Packet) -> List[float]:
+    top_ports_count = sum([pair[1] for pair in data.top_dst_ports[:3]])
+
     return [
-        packet.proto,
-        packet.length,
-        packet.src_port or 0,
-        packet.dst_port or 0
+        data.packet_count,
+        data.unique_src_ip_count,
+        data.tcp_syn_count,
+        proto_tcp,
+        proto_udp,
+        proto_icmp,
+        top_ports_count
     ]
 
 @app.post("/api/sensor/submit")
-async def receive_traffic(request: Request, payload: PacketPayload):
+async def receive_aggregate(request: Request, payload: AggregatedTraffic):
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         raise HTTPException(status_code=403, detail="Missing or invalid Authorization header")
 
     user_key = auth.split()[1]
-    feature_vectors = [extract_features(pkt) for pkt in payload.data]
 
-    # Ініціалізація буфера
+    feature_vector = extract_features_from_aggregate(payload)
+
+    # === Буфер фічей для тренування
     if user_key not in user_buffers:
         user_buffers[user_key] = []
-    user_buffers[user_key].extend(feature_vectors)
+    user_buffers[user_key].append(feature_vector)
 
-    # Ініціалізація CUSUM
+    # === Ініціалізація CUSUM для кожного користувача
     if user_key not in user_cusums:
-        user_cusums[user_key] = CusumDetector(threshold=10.0, drift=0.1)
+        user_cusums[user_key] = CusumDetector(threshold=500.0, drift=10.0)
 
-    # Витягуємо для CUSUM скалярну метрику, наприклад середню довжину пакетів у цьому запиті
-    mean_length = np.mean([pkt.length for pkt in payload.data])
+    # === CUSUM: середній SYN count (чи packet size - залежно від метрики)
+    cusum_anomaly = user_cusums[user_key].update(payload.tcp_syn_count)
 
-    # Запускаємо CUSUM
-    cusum_anomaly = user_cusums[user_key].update(mean_length)
-
-    # Обробка Isolation Forest
+    # === Тренування моделі якщо ще немає
     if user_key not in user_models and len(user_buffers[user_key]) >= MIN_TRAIN_SIZE:
         data = np.array(user_buffers[user_key])
         scaler = StandardScaler()
@@ -69,18 +99,21 @@ async def receive_traffic(request: Request, payload: PacketPayload):
         model.fit(scaled_data)
         user_models[user_key] = model
         user_scalers[user_key] = scaler
-        return {"message": f"Model trained for user {user_key}", "status": "trained"}
+        return {**payload.dict(), "anomaly": False, "message": "Model trained"}
 
+    # === Визначення аномалії
+    isolation_anomaly = False
     if user_key in user_models:
-        data = np.array(feature_vectors)
-        scaled = user_scalers[user_key].transform(data)
-        preds = user_models[user_key].predict(scaled)
-        isolation_anomalies = [1 if p == -1 else 0 for p in preds]
-    else:
-        isolation_anomalies = []
+        scaled = user_scalers[user_key].transform([feature_vector])
+        pred = user_models[user_key].predict(scaled)[0]  # -1 = anomaly
+        isolation_anomaly = (pred == -1)
+
+    # === Остаточне рішення: якщо хоч одна модель сигналить
+    is_anomaly = cusum_anomaly or isolation_anomaly
 
     return {
+        **payload.dict(),
+        "anomaly": is_anomaly,
         "cusum_anomaly": cusum_anomaly,
-        "isolation_anomalies": isolation_anomalies,
-        "total_packets": len(feature_vectors)
+        "isolation_anomaly": isolation_anomaly
     }

@@ -12,6 +12,7 @@ defmodule HubWeb.UserDashboardLive do
 
     # Завантажуємо початкову статистику для обраного сенсора
     stats = load_stats(selected_sensor)
+    top_ports = load_top_ports(selected_sensor)
 
     {:ok,
      socket
@@ -19,20 +20,37 @@ defmodule HubWeb.UserDashboardLive do
      |> assign(:selected_sensor, selected_sensor)
      |> assign(:show_add_form, false)
      |> assign(:stats, stats)
-    }
+     |> assign(:top_ports, top_ports)}
   end
 
   def handle_event("select_sensor", %{"sensor_id" => sensor_id}, socket) do
     sensor = Enum.find(socket.assigns.sensors, &(&1.id == String.to_integer(sensor_id)))
     stats = load_stats(sensor)
+    top_ports = load_top_ports(sensor)
 
-    {:noreply, assign(socket, selected_sensor: sensor, stats: stats)}
+    {:noreply,
+     socket
+     |> assign(selected_sensor: sensor)
+     |> assign(stats: stats)
+     |> assign(:top_ports, top_ports)}
   end
 
   defp load_stats(nil), do: %{}
 
-  defp load_stats(sensor) do
-    TrafficRecords.get_sensor_stats(sensor.id)
+  defp load_stats(sensor), do: TrafficRecords.get_sensor_stats(sensor.id)
+
+  defp load_top_ports(nil), do: []
+
+  defp load_top_ports(sensor) do
+    sensor.id
+    |> TrafficRecords.get_top_ports()
+    |> Enum.flat_map(& &1.port)
+    |> Enum.reduce(%{}, fn [port, count], acc ->
+      Map.update(acc, port, count, &(&1 + count))
+    end)
+    |> Enum.map(fn {port, count} -> %{port: port, count: count} end)
+    |> Enum.sort_by(& &1.count, :desc)
+    |> Enum.take(10)
   end
 
   def handle_event("add_sensor", _params, socket) do
@@ -45,9 +63,18 @@ defmodule HubWeb.UserDashboardLive do
         %{assigns: %{current_user: user}} = socket
       ) do
     case Hub.Sensors.create_sensor(user, %{"name" => name}) do
-      {:ok, _sensor} ->
+      {:ok, sensor} ->
         sensors = Hub.Sensors.list_sensors_by_user(user.id)
-        {:noreply, assign(socket, sensors: sensors, show_add_form: false)}
+        stats = load_stats(sensor)
+        top_ports = load_top_ports(sensor)
+
+        {:noreply,
+         socket
+         |> assign(sensors: sensors)
+         |> assign(selected_sensor: sensor)
+         |> assign(stats: stats)
+         |> assign(:top_ports, top_ports)
+         |> assign(show_add_form: false)}
 
       {:error, changeset} ->
         {:noreply, assign(socket, changeset: changeset)}
