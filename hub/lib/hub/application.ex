@@ -17,7 +17,8 @@ defmodule Hub.Application do
       # Start a worker by calling: Hub.Worker.start_link(arg)
       # {Hub.Worker, arg},
       # Start to serve requests, typically the last entry
-      HubWeb.Endpoint
+      HubWeb.Endpoint,
+      Hub.TrafficBroadcast
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

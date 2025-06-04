@@ -10,3 +10,4 @@ erl_crash.dump
 .elixir_ls/
 sensor_config.json
 __pycache__/
+models/

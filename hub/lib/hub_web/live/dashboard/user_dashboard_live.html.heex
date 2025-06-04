@@ -55,20 +55,23 @@
             <%= @selected_sensor.api_key || "не встановлено" %>
           </p>
 
-          <%= if @stats !=[] do %>
-
-            <form phx-change="change_period" class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1" for="period">Період перегляду:</label>
+          <form phx-change="change_period" class="mb-4">
+            <div class="flex  gap-4">
+              <label class="block text-l font-medium text-black mb-4" for="period">
+                Період перегляду:
+              </label>
               <select name="period" id="period"
-                class="border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-black">
-                <option value="1h" selected={@search_period=="1h" }>Остання година</option>
-                <option value="3h" selected={@search_period=="3h" }>Останні 3 годин</option>
-                <option value="6h" selected={@search_period=="6h" }>Останні 6 годин</option>
-                <option value="24h" selected={@search_period=="24h" }>Останні 24 години</option>
-                <option value="3d" selected={@search_period=="3d" }>Останні 3 дні</option>
-                <option value="7d" selected={@search_period=="7d" }>Останні 7 днів</option>
+                class="bg-gray-900 text-white border border-gray-600 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-white transition">
+                <option value="1" selected={@search_period=="1" }>Остання година</option>
+                <option value="3" selected={@search_period=="3" }>Останні 3 години</option>
+                <option value="6" selected={@search_period=="6" }>Останні 6 годин</option>
+                <option value="12" selected={@search_period=="12" }>Останні 12 години</option>
+                <option value="24" selected={@search_period=="24" }>Останні 24 години</option>
               </select>
-            </form>
+            </div>
+          </form>
+
+          <%= if @stats !=[] do %>
 
             <section class="mt-6">
               <h3 class="text-lg font-medium mb-2">📊 Трафік і аномалії у часі</h3>
@@ -90,7 +93,7 @@
             </section>
 
             <section class="mt-6">
-              <h3 class="text-lg font-medium mb-2">⚠️ Аномалії: CUSUM vs Isolation Forest</h3>
+              <h3 class="text-lg font-medium mb-2">⚠️ Метод виявлення аномалії: CUSUM, Isolation Forest</h3>
               <div id="anomalyComparisonChart" phx-hook="AnomalyComparisonChart" data-chart={Jason.encode!(%{
                 categories: Enum.map(@stats, &Timex.format!(&1.time, "{ISO:Extended}" )), cusum: Enum.map(@stats, &
                 &1.cusum_anomaly_count), isolation: Enum.map(@stats, & &1.isolation_anomaly_count) })}

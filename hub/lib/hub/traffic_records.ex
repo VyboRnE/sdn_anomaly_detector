@@ -3,10 +3,10 @@ defmodule Hub.TrafficRecords do
   alias Hub.Repo
   alias Hub.TrafficRecords.TrafficRecord
 
-  def get_sensor_stats(sensor_id, hours \\ 24) do
+  def get_sensor_stats(sensor_id, period) do
     interval = "minute"
-    now_unix = DateTime.utc_now() |> DateTime.to_unix()
-    from_unix = now_unix - hours * 3600
+    now_unix = Timex.now() |> Timex.to_unix()
+    from_unix = now_unix - String.to_integer(period) * 3600
 
     base_query =
       from(tr in TrafficRecord,
@@ -46,15 +46,26 @@ defmodule Hub.TrafficRecords do
     Repo.all(query)
   end
 
-  def get_top_ports(sensor_id) do
+  def get_top_ports(sensor_id, period) do
+    interval = "minute"
+    now_unix = Timex.now() |> Timex.to_unix()
+    from_unix = now_unix - String.to_integer(period) * 3600
+
     from(t in TrafficRecord,
-      where: t.sensor_id == ^sensor_id,
+      where: t.sensor_id == ^sensor_id and t.timestamp >= ^from_unix,
       group_by: t.top_dst_ports,
       select: %{port: t.top_dst_ports, count: count(t.id)},
       order_by: [desc: count(t.id)],
       limit: 10
     )
     |> Repo.all()
+    |> Enum.flat_map(& &1.port)
+    |> Enum.reduce(%{}, fn [port, count], acc ->
+      Map.update(acc, port, count, &(&1 + count))
+    end)
+    |> Enum.map(fn {port, count} -> %{port: port, count: count} end)
+    |> Enum.sort_by(& &1.count, :desc)
+    |> Enum.take(10)
   end
 
   def store_report(sensor, attrs) do
