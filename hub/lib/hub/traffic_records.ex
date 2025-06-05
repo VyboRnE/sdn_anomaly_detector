@@ -47,7 +47,6 @@ defmodule Hub.TrafficRecords do
   end
 
   def get_top_ports(sensor_id, period) do
-    interval = "minute"
     now_unix = Timex.now() |> Timex.to_unix()
     from_unix = now_unix - String.to_integer(period) * 3600
 

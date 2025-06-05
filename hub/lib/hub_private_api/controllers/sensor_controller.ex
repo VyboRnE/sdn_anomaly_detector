@@ -5,7 +5,7 @@ defmodule HubPrivateAPI.Controllers.SensorController do
   alias Hub.Sensors.Sensor
   alias Hub.TrafficRecords
 
-  @detector_url "http://0.0.0.0:8000/api/detect"
+  @detector_url "https://sdn-anomaly-detector.onrender.com/api/detect"
 
   def receive_data(conn, params) do
     case get_req_header(conn, "authorization") do

@@ -6,7 +6,7 @@ defmodule HubWeb.UserDashboardLive do
   alias Hub.TrafficRecords
   alias Phoenix.PubSub
   @impl true
-  def mount(_params, %{"user_token" => user_token} = session, socket) do
+  def mount(_params, %{"user_token" => user_token}, socket) do
     user = Accounts.get_user_by_session_token(user_token)
     sensors = Sensors.list_sensors_by_user(user.id)
     selected_sensor = List.first(sensors)
@@ -16,7 +16,7 @@ defmodule HubWeb.UserDashboardLive do
     top_ports = load_top_ports(selected_sensor, "3")
 
     if connected?(socket) && selected_sensor,
-      do: PubSub.subscribe(Hub.PubSub, "pubsub_refresh") 
+      do: PubSub.subscribe(Hub.PubSub, "pubsub_refresh")
 
     {:ok,
      socket
